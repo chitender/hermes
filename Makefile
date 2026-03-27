@@ -73,26 +73,39 @@ test-integration: envtest
 
 # ── Docker ─────────────────────────────────────────────────────────────────────
 
-## docker-build: Build the operator Docker image for the local platform.
+# Arch-suffixed image tags — built natively on each machine then combined
+# into a multi-arch manifest.
+IMG_AMD64 ?= $(IMG)-amd64
+IMG_ARM64 ?= $(IMG)-arm64
+
+## docker-build: Build a native image on the current machine and tag it.
+## Run this once on the amd64 host and once on the arm64 host.
 .PHONY: docker-build
 docker-build:
-	docker buildx build \
-		--platform linux/amd64 \
-		--tag $(IMG) \
-		--load \
-		.
+	docker build --tag $(IMG) .
 
-## docker-buildx: Build and push a multi-arch manifest (amd64 + arm64).
-PLATFORMS ?= linux/amd64,linux/arm64
-.PHONY: docker-buildx
-docker-buildx:
-	docker buildx build \
-		--platform $(PLATFORMS) \
-		--tag $(IMG) \
-		--push \
-		.
+## docker-build-amd64: Build and tag the amd64 image (run on amd64 host).
+.PHONY: docker-build-amd64
+docker-build-amd64:
+	docker build --tag $(IMG_AMD64) .
+	docker push $(IMG_AMD64)
 
-## docker-push: Push the Docker image to the registry.
+## docker-build-arm64: Build and tag the arm64 image (run on arm64 host).
+.PHONY: docker-build-arm64
+docker-build-arm64:
+	docker build --tag $(IMG_ARM64) .
+	docker push $(IMG_ARM64)
+
+## docker-manifest: Combine amd64 + arm64 images into a multi-arch manifest.
+## Run this after both arch images have been pushed to the registry.
+.PHONY: docker-manifest
+docker-manifest:
+	docker manifest create $(IMG) \
+		--amend $(IMG_AMD64) \
+		--amend $(IMG_ARM64)
+	docker manifest push $(IMG)
+
+## docker-push: Push a single-arch image built by docker-build.
 .PHONY: docker-push
 docker-push:
 	docker push $(IMG)
