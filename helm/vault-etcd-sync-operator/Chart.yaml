@@ -1,0 +1,19 @@
+apiVersion: v2
+name: vault-etcd-sync-operator
+description: |
+  A Kubernetes Operator that syncs secrets from HashiCorp Vault into etcd
+  as rendered JSON using a Go-template system. Watches VaultEtcdSync CRs
+  and performs periodic + event-driven reconciliation.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - vault
+  - etcd
+  - secrets
+  - operator
+  - kubernetes
+home: https://github.com/example/vault-etcd-sync-operator
+maintainers:
+  - name: platform-team
+    email: platform@example.com

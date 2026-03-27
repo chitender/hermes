@@ -1,0 +1,180 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: vaultedcsyncs.sync.example.com
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.0
+spec:
+  group: sync.example.com
+  names:
+    kind: VaultEtcdSync
+    listKind: VaultEtcdSyncList
+    plural: vaultedcsyncs
+    singular: vaultedcsync
+    shortNames:
+      - ves
+    categories:
+      - all
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: EtcdKey
+          type: string
+          jsonPath: .spec.etcdKey
+        - name: Interval
+          type: string
+          jsonPath: .spec.syncInterval
+        - name: Status
+          type: string
+          jsonPath: .status.lastSyncStatus
+        - name: LastSync
+          type: string
+          jsonPath: .status.lastSyncTime
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          description: VaultEtcdSync syncs secrets from HashiCorp Vault into etcd
+            as rendered JSON using a Go-template system.
+          type: object
+          required:
+            - spec
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - vaultPaths
+                - etcdKey
+                - jsonTemplate
+                - vaultRef
+                - etcdRef
+              properties:
+                vaultPaths:
+                  description: VaultPaths lists the Vault KV v2 paths to read. All
+                    secret data maps are merged into a single flat map (last path
+                    wins on key collisions; prefix is applied per-path before merging).
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      - path
+                    properties:
+                      path:
+                        description: Path is the full Vault KV v2 path,
+                          e.g. "secret/data/myapp/db".
+                        type: string
+                      prefix:
+                        description: Prefix is prepended to every key read from
+                          this path before merging, e.g. "PG_" turns "PASSWORD"
+                          into "PG_PASSWORD".
+                        type: string
+                etcdKey:
+                  description: EtcdKey is the key under which the rendered JSON
+                    is written in etcd.
+                  type: string
+                jsonTemplate:
+                  description: JSONTemplate is a Go text/template string rendered
+                    against the merged Vault secret map. The output must be valid
+                    JSON.
+                  type: string
+                syncInterval:
+                  description: SyncInterval is the period between periodic re-syncs
+                    (e.g. "60s", "5m"). The operator also re-syncs immediately on
+                    Vault secret version changes.
+                  type: string
+                  default: "60s"
+                vaultRef:
+                  description: VaultRef points to the K8s Secret holding Vault
+                    authentication config.
+                  type: object
+                  required:
+                    - secretRef
+                  properties:
+                    secretRef:
+                      description: SecretRef is "namespace/name" of a K8s Secret
+                        containing vault auth fields.
+                      type: string
+                etcdRef:
+                  description: EtcdRef holds etcd endpoint and credential information.
+                  type: object
+                  required:
+                    - secretRef
+                    - endpoints
+                  properties:
+                    secretRef:
+                      description: SecretRef is "namespace/name" of a K8s Secret
+                        with fields username and password.
+                      type: string
+                    endpoints:
+                      description: Endpoints is the list of etcd client endpoints.
+                      type: array
+                      minItems: 1
+                      items:
+                        type: string
+                    tlsSecretRef:
+                      description: TLSSecretRef is "namespace/name" of a K8s Secret
+                        containing ca.crt, tls.crt, tls.key for mutual TLS with etcd.
+                      type: string
+            status:
+              type: object
+              properties:
+                lastSyncTime:
+                  description: LastSyncTime is the RFC3339 timestamp of the most
+                    recent sync attempt.
+                  type: string
+                lastSyncStatus:
+                  description: LastSyncStatus is "Success" or "Failed".
+                  type: string
+                conditions:
+                  description: Conditions holds standard K8s conditions (type Ready).
+                  type: array
+                  items:
+                    description: Condition contains details for one aspect of the
+                      current state of this API resource.
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                        maxLength: 32768
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                      reason:
+                        type: string
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      type:
+                        type: string
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$

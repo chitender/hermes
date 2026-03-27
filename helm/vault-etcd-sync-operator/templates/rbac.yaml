@@ -1,0 +1,55 @@
+{{- if .Values.rbac.create }}
+---
+# ClusterRole grants the operator the minimum permissions it needs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vault-etcd-sync-operator.fullname" . }}-manager
+  labels:
+    {{- include "vault-etcd-sync-operator.labels" . | nindent 4 }}
+rules:
+  # Read and update VaultEtcdSync CRs and their status sub-resource.
+  - apiGroups: ["sync.example.com"]
+    resources: ["vaultedcsyncs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["sync.example.com"]
+    resources: ["vaultedcsyncs/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["sync.example.com"]
+    resources: ["vaultedcsyncs/finalizers"]
+    verbs: ["update"]
+
+  # Read K8s Secrets (vault-auth-secret, etcd-auth-secret, etcd-tls-secret).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+
+  # Emit Kubernetes Events for sync success / failure.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+  # Leader election: ConfigMaps and Leases.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vault-etcd-sync-operator.fullname" . }}-manager
+  labels:
+    {{- include "vault-etcd-sync-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "vault-etcd-sync-operator.fullname" . }}-manager
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vault-etcd-sync-operator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
