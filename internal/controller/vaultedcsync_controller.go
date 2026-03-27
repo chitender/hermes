@@ -415,6 +415,16 @@ func (r *VaultEtcdSyncReconciler) setCondition(
 	reason, message string,
 ) {
 	r.setConditionOnObject(ves, status, reason, message)
+
+	// Always stamp LastSyncTime and LastSyncStatus so the kubectl get columns
+	// are never blank, even on failure.
+	ves.Status.LastSyncTime = time.Now().UTC().Format(time.RFC3339)
+	if status == metav1.ConditionTrue {
+		ves.Status.LastSyncStatus = "Success"
+	} else {
+		ves.Status.LastSyncStatus = "Failed"
+	}
+
 	if err := r.Status().Update(ctx, ves); err != nil {
 		logger.Error(err, "failed to update status conditions")
 	}
