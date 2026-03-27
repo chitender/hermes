@@ -20,6 +20,9 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "vault-etcd-sync-operator.serviceAccountName" . }}
+      # Disable the default SA token automount — we provide our own projected
+      # volume below with a short-lived token and explicit audience for Vault.
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
 
       {{- with .Values.podSecurityContext }}

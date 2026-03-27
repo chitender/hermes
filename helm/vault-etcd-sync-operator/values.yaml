@@ -84,19 +84,40 @@ tolerations: []
 affinity: {}
 
 # ── Extra volumes ─────────────────────────────────────────────────────────────
-# Mount the K8s service account token as a projected volume with a short TTL
-# so Vault Kubernetes auth always uses a fresh JWT.
+# We fully replace the default SA token mount with a projected volume so we can
+# control the JWT audience (required for Vault Kubernetes auth) and TTL.
+#
+# The projected volume must include ALL three sources that Kubernetes normally
+# provides in /var/run/secrets/kubernetes.io/serviceaccount:
+#   token     — JWT (short-lived, Vault audience)
+#   ca.crt    — cluster CA; controller-runtime needs this to verify the API server
+#   namespace — namespace file read by the client-go in-cluster config
+#
+# automountServiceAccountToken is set to false in the Deployment so Kubernetes
+# does not also mount its own default SA volume at the same path.
 extraVolumes:
-  - name: vault-sa-token
+  - name: kube-api-access
     projected:
+      defaultMode: 0444
       sources:
         - serviceAccountToken:
             path: token
             expirationSeconds: 3600
             audience: vault
+        - configMap:
+            name: kube-root-ca.crt
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - downwardAPI:
+            items:
+              - path: namespace
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
 
 extraVolumeMounts:
-  - name: vault-sa-token
+  - name: kube-api-access
     mountPath: /var/run/secrets/kubernetes.io/serviceaccount
     readOnly: true
 
