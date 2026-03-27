@@ -106,24 +106,40 @@ type VaultEtcdSyncReconciler struct {
 	// NamespacedName.String(). Values are context.CancelFunc.
 	watchers vaultclient.WatcherRegistry
 
-	// rootCtx is the manager's root context. Watcher goroutines are parented
-	// to this context so they live beyond the per-reconcile request context.
-	rootCtx context.Context //nolint:containedctx
+	// rootCtx is set by Start() when the manager starts this runnable.
+	// Watcher goroutines are parented to it so they live beyond a single
+	// reconcile request context but are cancelled on manager shutdown.
+	rootCtx    context.Context    //nolint:containedctx
+	rootCancel context.CancelFunc
+}
+
+// Start implements manager.Runnable. The manager calls this with its lifecycle
+// context, giving us a root context that outlives any single reconcile call.
+func (r *VaultEtcdSyncReconciler) Start(ctx context.Context) error {
+	r.rootCtx, r.rootCancel = context.WithCancel(ctx)
+	<-ctx.Done()
+	r.rootCancel()
+	r.watchers.StopAll() // clean shutdown: cancel all watcher goroutines
+	return nil
 }
 
 // SetupWithManager registers the controller with the Manager and configures
 // all watches, including the channel used by Vault watcher goroutines.
 func (r *VaultEtcdSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.watcherCh = make(chan event.GenericEvent, 256)
-	r.rootCtx = mgr.GetContext() // manager context lives as long as the process
+
+	// Register as a Runnable so the manager calls Start() with its lifecycle ctx.
+	if err := mgr.Add(r); err != nil {
+		return fmt.Errorf("registering reconciler as runnable: %w", err)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&syncv1alpha1.VaultEtcdSync{}).
-		// Watch the channel that Vault watchers write to when a secret changes.
-		// source.Channel is generic in controller-runtime v0.19+; we use
-		// handler.TypedFuncs with the concrete workqueue type.
+		// source.Channel infers object=client.Object from chan event.GenericEvent
+		// (event.GenericEvent = TypedGenericEvent[client.Object]).
+		// The handler type must therefore be TypedFuncs[client.Object, ...].
 		WatchesRawSource(
-			source.Channel(r.watcherCh, handler.TypedFuncs[event.GenericEvent, reconcile.Request]{
+			source.Channel(r.watcherCh, handler.TypedFuncs[client.Object, reconcile.Request]{
 				GenericFunc: func(
 					ctx context.Context,
 					e event.GenericEvent,
@@ -278,9 +294,13 @@ func (r *VaultEtcdSyncReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	logger.Info("sync successful", "etcdKey", ves.Spec.EtcdKey)
 
 	// ── Start / restart Vault watcher ─────────────────────────────────────────
-	// Use the manager's root context (not the reconcile ctx) so the watcher
-	// goroutine outlives this single reconcile invocation.
-	r.startWatcher(r.rootCtx, logger, vaultClient, &ves, req.NamespacedName, interval)
+	// rootCtx is set by Start(); fall back to the reconcile ctx if Start() has
+	// not fired yet (e.g. in unit tests without a full manager).
+	watchCtx := r.rootCtx
+	if watchCtx == nil {
+		watchCtx = ctx
+	}
+	r.startWatcher(watchCtx, logger, vaultClient, &ves, req.NamespacedName, interval)
 
 	return ctrl.Result{RequeueAfter: interval}, nil
 }
