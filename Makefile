@@ -73,12 +73,23 @@ test-integration: envtest
 
 # ── Docker ─────────────────────────────────────────────────────────────────────
 
-## docker-build: Build the operator Docker image.
+## docker-build: Build the operator Docker image for the local platform.
 .PHONY: docker-build
 docker-build:
-	docker build \
+	docker buildx build \
 		--platform linux/amd64 \
 		--tag $(IMG) \
+		--load \
+		.
+
+## docker-buildx: Build and push a multi-arch manifest (amd64 + arm64).
+PLATFORMS ?= linux/amd64,linux/arm64
+.PHONY: docker-buildx
+docker-buildx:
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		--tag $(IMG) \
+		--push \
 		.
 
 ## docker-push: Push the Docker image to the registry.

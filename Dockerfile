@@ -1,10 +1,18 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM golang:1.22-bookworm AS builder
+# BuildKit automatically populates TARGETPLATFORM, TARGETOS, TARGETARCH, and
+# TARGETVARIANT when `docker buildx build --platform ...` is used.
+# Declaring them as ARGs exposes them inside the build stage.
+FROM --platform=$BUILDPLATFORM golang:1.22-bookworm AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 WORKDIR /workspace
 
 # Download dependencies first so Docker can cache this layer independently
-# from source changes.
+# from source changes. This layer is shared across all target platforms
+# because we run it on the build host (BUILDPLATFORM).
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     go mod download
@@ -14,12 +22,13 @@ COPY cmd/       cmd/
 COPY api/       api/
 COPY internal/  internal/
 
-# Build the operator binary.
-# CGO_ENABLED=0 produces a fully static binary compatible with distroless.
-# -ldflags="-s -w" strips debug symbols, reducing image size.
+# Cross-compile for the requested target platform.
+# CGO_ENABLED=0 produces a fully static binary — required for distroless.
+# GOARM is set from TARGETVARIANT (e.g. "v7" → GOARM=7) for arm/v7 builds.
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    GOARM=$(echo "${TARGETVARIANT}" | sed 's/v//') \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build \
       -ldflags="-s -w" \
       -trimpath \
