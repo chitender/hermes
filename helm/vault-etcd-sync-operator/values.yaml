@@ -96,6 +96,8 @@ affinity: {}
 # automountServiceAccountToken is set to false in the Deployment so Kubernetes
 # does not also mount its own default SA volume at the same path.
 extraVolumes:
+  # Token 1: standard K8s API access (no audience = accepted by API server).
+  # Provides ca.crt and namespace that controller-runtime needs.
   - name: kube-api-access
     projected:
       defaultMode: 0444
@@ -103,7 +105,6 @@ extraVolumes:
         - serviceAccountToken:
             path: token
             expirationSeconds: 3600
-            audience: vault
         - configMap:
             name: kube-root-ca.crt
             items:
@@ -115,10 +116,23 @@ extraVolumes:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.namespace
+  # Token 2: Vault-specific token with audience "vault".
+  # Mounted at a separate path; vault/client.go reads from here for k8s auth.
+  - name: vault-sa-token
+    projected:
+      defaultMode: 0444
+      sources:
+        - serviceAccountToken:
+            path: token
+            expirationSeconds: 3600
+            audience: vault
 
 extraVolumeMounts:
   - name: kube-api-access
     mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+    readOnly: true
+  - name: vault-sa-token
+    mountPath: /var/run/secrets/vault
     readOnly: true
 
 # ── Pod annotations ───────────────────────────────────────────────────────────

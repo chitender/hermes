@@ -23,9 +23,12 @@ const (
 	defaultUserpassMount   = "userpass"
 	defaultKubernetesMount = "kubernetes"
 
-	// serviceAccountTokenPath is the standard projected volume mount path for
-	// the pod's service-account JWT when using Kubernetes auth.
-	serviceAccountTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	// serviceAccountTokenPath is the path to the Vault-audience JWT.
+	// This is a separate projected volume from the default K8s API token so
+	// each token carries the correct audience:
+	//   /var/run/secrets/kubernetes.io/serviceaccount/token  → audience: k8s API
+	//   /var/run/secrets/vault/token                         → audience: vault
+	serviceAccountTokenPath = "/var/run/secrets/vault/token"
 
 	// renewInterval is how often the renewal loop wakes up to renew the token.
 	// We target renewing well before the TTL expires.
