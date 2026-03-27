@@ -1,0 +1,47 @@
+# Basic example — single Vault path, no TLS, token auth.
+# Prerequisites:
+#   kubectl create secret generic vault-auth-secret -n vault-etcd-sync \
+#     --from-literal=authMethod=token \
+#     --from-literal=vaultAddress=https://vault.example.com \
+#     --from-literal=token=s.xxxxxxxx
+#
+#   kubectl create secret generic etcd-auth-secret -n vault-etcd-sync \
+#     --from-literal=username=etcduser \
+#     --from-literal=password=etcdpassword
+---
+apiVersion: sync.example.com/v1alpha1
+kind: VaultEtcdSync
+metadata:
+  name: basic-example
+  namespace: vault-etcd-sync
+spec:
+  vaultPaths:
+    - path: "secret/data/myapp/config"
+
+  etcdKey: "/myapp/config"
+
+  jsonTemplate: |
+    {
+      "database": {
+        "host": "postgres.myapp.svc",
+        "port": 5432,
+        "username": "{{ .DB_USERNAME }}",
+        "password": "{{ .DB_PASSWORD }}"
+      },
+      "cache": {
+        "host": "redis.myapp.svc",
+        "port": 6379
+      }
+    }
+
+  syncInterval: "60s"
+
+  vaultRef:
+    secretRef: "vault-etcd-sync/vault-auth-secret"
+
+  etcdRef:
+    secretRef: "vault-etcd-sync/etcd-auth-secret"
+    endpoints:
+      - "https://etcd-0.etcd:2379"
+      - "https://etcd-1.etcd:2379"
+      - "https://etcd-2.etcd:2379"

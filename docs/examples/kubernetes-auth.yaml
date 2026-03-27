@@ -1,0 +1,66 @@
+# Kubernetes ServiceAccount auth example (recommended for production).
+#
+# No static tokens — the operator pod's projected JWT is used automatically.
+# The Vault role must be pre-created:
+#
+#   vault write auth/kubernetes/role/hermes-role \
+#     bound_service_account_names=hermes-vault-etcd-sync-operator \
+#     bound_service_account_namespaces=vault-etcd-sync \
+#     policies=hermes-policy \
+#     ttl=1h
+#
+# Helm values to annotate the ServiceAccount:
+#   serviceAccount:
+#     annotations:
+#       vault.hashicorp.com/role: "hermes-role"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-auth-secret
+  namespace: vault-etcd-sync
+type: Opaque
+stringData:
+  authMethod: "kubernetes"
+  vaultAddress: "https://vault.example.com"
+  vaultRole: "hermes-role"
+  mountPath: "kubernetes"
+---
+apiVersion: sync.example.com/v1alpha1
+kind: VaultEtcdSync
+metadata:
+  name: prod-app-config
+  namespace: vault-etcd-sync
+spec:
+  vaultPaths:
+    - path: "secret/data/prod/myapp/db"
+    - path: "secret/data/prod/myapp/cache"
+
+  etcdKey: "/prod/myapp/config"
+
+  jsonTemplate: |
+    {
+      "db": {
+        "host":     "{{ default "postgres.prod.svc" .DB_HOST }}",
+        "port":     5432,
+        "username": "{{ .DB_USERNAME }}",
+        "password": "{{ .DB_PASSWORD }}"
+      },
+      "cache": {
+        "host": "{{ default "redis.prod.svc" .CACHE_HOST }}",
+        "port": 6379
+      }
+    }
+
+  syncInterval: "5m"
+
+  vaultRef:
+    secretRef: "vault-etcd-sync/vault-auth-secret"
+
+  etcdRef:
+    secretRef: "vault-etcd-sync/etcd-auth-secret"
+    endpoints:
+      - "https://etcd-0.etcd:2379"
+      - "https://etcd-1.etcd:2379"
+      - "https://etcd-2.etcd:2379"
+    tlsSecretRef: "vault-etcd-sync/etcd-tls-secret"

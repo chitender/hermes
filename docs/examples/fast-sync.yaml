@@ -1,0 +1,36 @@
+# Fast-sync example — short interval for secrets that change frequently.
+#
+# syncInterval: "30s" means a full re-sync runs every 30 seconds as a fallback.
+# The Vault watcher goroutine will trigger an immediate reconcile the moment
+# a secret version changes, so in practice most updates arrive within seconds.
+---
+apiVersion: sync.example.com/v1alpha1
+kind: VaultEtcdSync
+metadata:
+  name: feature-flags
+  namespace: vault-etcd-sync
+spec:
+  vaultPaths:
+    - path: "secret/data/shared/feature-flags"
+
+  etcdKey: "/shared/feature-flags"
+
+  jsonTemplate: |
+    {
+      "flags": {
+        "new_dashboard":    {{ default "false" .NEW_DASHBOARD }},
+        "dark_mode":        {{ default "false" .DARK_MODE }},
+        "beta_api":         {{ default "false" .BETA_API }},
+        "maintenance_mode": {{ default "false" .MAINTENANCE_MODE }}
+      }
+    }
+
+  syncInterval: "30s"
+
+  vaultRef:
+    secretRef: "vault-etcd-sync/vault-auth-secret"
+
+  etcdRef:
+    secretRef: "vault-etcd-sync/etcd-auth-secret"
+    endpoints:
+      - "https://etcd-0.etcd:2379"

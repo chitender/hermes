@@ -1,0 +1,72 @@
+# Multi-path example with key prefixes to avoid collisions.
+#
+# Three Vault paths each export a "USERNAME" and "PASSWORD" key.
+# Prefixes disambiguate them in the merged map:
+#   .PG_USERNAME, .PG_PASSWORD
+#   .MONGO_USERNAME, .MONGO_PASSWORD
+#   .AZURE_CLIENT_ID, .AZURE_CLIENT_SECRET, .AZURE_STORAGE_ACCOUNT
+---
+apiVersion: sync.example.com/v1alpha1
+kind: VaultEtcdSync
+metadata:
+  name: gravity-staging-config
+  namespace: vault-etcd-sync
+spec:
+  vaultPaths:
+    - path: "secret/data/gravity/staging/postgres"
+      prefix: "PG_"
+    - path: "secret/data/gravity/staging/mongo"
+      prefix: "MONGO_"
+    - path: "secret/data/gravity/staging/azure"
+      prefix: "AZURE_"
+
+  etcdKey: "/gravity/staging/app-config"
+
+  jsonTemplate: |
+    {
+      "cloud": {
+        "enabled": true,
+        "connection": {
+          "BUCKET":         "{{ .AZURE_STORAGE_ACCOUNT }}",
+          "ACCESS_KEY":     "{{ .AZURE_CLIENT_ID }}",
+          "SECRET_KEY":     "{{ .AZURE_CLIENT_SECRET }}",
+          "REGION":         "us-east-1",
+          "CLOUD_PROVIDER": "adls"
+        }
+      },
+      "sqlalchemy": {
+        "enabled": true,
+        "connection": {
+          "HOST":         "postgresdb.gravity-staging",
+          "PORT":         5432,
+          "USERNAME":     "{{ .PG_USERNAME }}",
+          "PASSWORD":     "{{ .PG_PASSWORD }}",
+          "DATABASE":     "dem",
+          "POOL_SIZE":    10,
+          "MAX_OVERFLOW": 20
+        }
+      },
+      "pymongo": {
+        "enabled": true,
+        "connection": {
+          "HOST":         "mongodb.gravity-staging",
+          "PORT":         27017,
+          "USERNAME":     "{{ .MONGO_USERNAME }}",
+          "PASSWORD":     "{{ .MONGO_PASSWORD }}",
+          "DATABASE":     "dem"
+        }
+      }
+    }
+
+  syncInterval: "60s"
+
+  vaultRef:
+    secretRef: "vault-etcd-sync/vault-auth-secret"
+
+  etcdRef:
+    secretRef: "vault-etcd-sync/etcd-auth-secret"
+    endpoints:
+      - "https://etcd-0.etcd:2379"
+      - "https://etcd-1.etcd:2379"
+      - "https://etcd-2.etcd:2379"
+    tlsSecretRef: "vault-etcd-sync/etcd-tls-secret"
