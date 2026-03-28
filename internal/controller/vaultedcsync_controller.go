@@ -17,9 +17,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"k8s.io/client-go/util/workqueue"
@@ -134,7 +136,10 @@ func (r *VaultEtcdSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&syncv1alpha1.VaultEtcdSync{}).
+		// GenerationChangedPredicate filters out status-only updates (which don't
+		// increment .metadata.generation), preventing Status().Update() from
+		// re-enqueuing the CR and causing a reconcile storm.
+		For(&syncv1alpha1.VaultEtcdSync{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		// source.Channel infers object=client.Object from chan event.GenericEvent
 		// (event.GenericEvent = TypedGenericEvent[client.Object]).
 		// The handler type must therefore be TypedFuncs[client.Object, ...].
