@@ -5,6 +5,7 @@ package vault
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -311,9 +312,16 @@ func kvDataPathToMetadata(path string) string {
 }
 
 // toInt converts Vault's JSON-decoded number types to int.
-// Vault unmarshals numbers as float64 when using encoding/json.
+// The Vault API client decodes with UseNumber(), so numbers arrive as
+// json.Number. Standard encoding/json without UseNumber gives float64.
 func toInt(v interface{}) (int, error) {
 	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("parsing json.Number %q: %w", n, err)
+		}
+		return int(i), nil
 	case float64:
 		return int(n), nil
 	case int:
