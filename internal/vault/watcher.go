@@ -11,6 +11,7 @@ package vault
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -130,39 +131,61 @@ func (w *Watcher) checkForChanges(ctx context.Context) bool {
 
 // ─── WatcherRegistry ─────────────────────────────────────────────────────────
 
+// watcherEntry holds a watcher's cancel function and its config signature.
+type watcherEntry struct {
+	cancel    context.CancelFunc
+	signature string // "<interval>|path1|path2|..."
+}
+
 // WatcherRegistry manages per-CR watcher goroutines. It maps a NamespacedName
 // string to a cancel function, allowing the controller to start/stop watchers.
 type WatcherRegistry struct {
-	cancels sync.Map // map[string]context.CancelFunc
+	entries sync.Map // map[string]watcherEntry
 }
 
-// StartOrReplace starts a new watcher goroutine for key, stopping any existing
-// one first. The key is typically types.NamespacedName.String().
+// watcherSignature builds a comparable string from the watcher's config.
+// If the signature is unchanged the existing goroutine is kept running.
+func watcherSignature(paths []string, interval time.Duration) string {
+	return fmt.Sprintf("%s|%s", interval, strings.Join(paths, "|"))
+}
+
+// StartOrReplace starts a new watcher goroutine for key only if no watcher is
+// currently running with the same paths and interval. If the config changed
+// (paths added/removed or interval updated) the old goroutine is stopped first.
 func (r *WatcherRegistry) StartOrReplace(key string, w *Watcher, parentCtx context.Context) {
-	// Stop existing watcher for this key if any.
-	r.Stop(key)
+	sig := watcherSignature(w.paths, w.interval)
+
+	// If a watcher with the same config is already running, leave it alone.
+	if v, ok := r.entries.Load(key); ok {
+		if v.(watcherEntry).signature == sig {
+			return
+		}
+		// Config changed — stop the old goroutine before starting a new one.
+		v.(watcherEntry).cancel()
+		r.entries.Delete(key)
+	}
 
 	ctx, cancel := context.WithCancel(parentCtx)
-	r.cancels.Store(key, cancel)
+	r.entries.Store(key, watcherEntry{cancel: cancel, signature: sig})
 
 	go func() {
-		defer r.cancels.Delete(key)
+		defer r.entries.Delete(key)
 		w.Run(ctx)
 	}()
 }
 
 // Stop cancels the watcher for key, if one exists.
 func (r *WatcherRegistry) Stop(key string) {
-	if v, ok := r.cancels.LoadAndDelete(key); ok {
-		v.(context.CancelFunc)()
+	if v, ok := r.entries.LoadAndDelete(key); ok {
+		v.(watcherEntry).cancel()
 	}
 }
 
 // StopAll cancels every registered watcher.
 func (r *WatcherRegistry) StopAll() {
-	r.cancels.Range(func(k, v interface{}) bool {
-		v.(context.CancelFunc)()
-		r.cancels.Delete(k)
+	r.entries.Range(func(k, v interface{}) bool {
+		v.(watcherEntry).cancel()
+		r.entries.Delete(k)
 		return true
 	})
 }
