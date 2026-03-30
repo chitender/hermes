@@ -3,7 +3,7 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 # Build configuration
-IMG            ?= vault-etcd-sync-operator:latest
+IMG            ?= ghcr.io/chitender/hermes:latest
 CONTROLLER_GEN ?= $(shell which controller-gen 2>/dev/null || echo go run sigs.k8s.io/controller-tools/cmd/controller-gen)
 ENVTEST        ?= go run sigs.k8s.io/controller-runtime/tools/setup-envtest
 

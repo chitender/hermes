@@ -57,7 +57,7 @@ kubectl apply -f docs/examples/basic.yaml
 helm upgrade --install hermes helm/vault-etcd-sync-operator \
   --namespace vault-etcd-sync \
   --create-namespace \
-  --set image.repository=728921286627.dkr.ecr.us-east-1.amazonaws.com/dev/hermes \
+  --set image.repository=ghcr.io/chitender/hermes \
   --set image.tag=latest
 ```
 
@@ -94,7 +94,7 @@ Minimal `my-values.yaml`:
 
 ```yaml
 image:
-  repository: 728921286627.dkr.ecr.us-east-1.amazonaws.com/dev/hermes
+  repository: ghcr.io/chitender/hermes
   tag: "1.0.0"
 
 replicaCount: 2
@@ -120,13 +120,26 @@ kubectl apply -f config/crd/bases/sync.example.com_vaultedcsyncs.yaml
 ## Building
 
 ```bash
+# Login to GitHub Container Registry first
+echo $CR_PAT | docker login ghcr.io -u chitender --password-stdin
+
 make build                   # compile binary locally
 make docker-build IMG=...    # native image on current machine
 
 # Multi-arch manifest workflow (build on each host, combine)
-make docker-build-amd64 IMG=registry/hermes:1.0.0   # run on amd64 host
-make docker-build-arm64 IMG=registry/hermes:1.0.0   # run on arm64 host
-make docker-manifest    IMG=registry/hermes:1.0.0   # combine + push manifest
+make docker-build-amd64 IMG=ghcr.io/chitender/hermes:1.0.0   # run on amd64 host
+make docker-build-arm64 IMG=ghcr.io/chitender/hermes:1.0.0   # run on arm64 host
+make docker-manifest    IMG=ghcr.io/chitender/hermes:1.0.0   # combine + push manifest
+```
+
+CI automatically builds and pushes multi-arch images to `ghcr.io/chitender/hermes` on every push via GitHub Actions.
+
+### Install Helm chart from GHCR
+
+```bash
+helm install hermes oci://ghcr.io/chitender/helm-charts/vault-etcd-sync-operator \
+  --namespace vault-etcd-sync \
+  --create-namespace
 ```
 
 ---

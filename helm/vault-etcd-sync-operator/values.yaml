@@ -3,12 +3,11 @@ replicaCount: 1
 
 # ── Image ─────────────────────────────────────────────────────────────────────
 image:
-  repository: 728921286627.dkr.ecr.us-east-1.amazonaws.com/dev/hermes
+  repository: ghcr.io/chitender/hermes
   tag: "v0.1.0-rc.4"
   pullPolicy: IfNotPresent
 
-imagePullSecrets:
-- name: registry-secret
+imagePullSecrets: []
 
 # ── Service account ───────────────────────────────────────────────────────────
 serviceAccount:

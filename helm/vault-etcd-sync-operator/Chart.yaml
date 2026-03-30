@@ -13,7 +13,8 @@ keywords:
   - secrets
   - operator
   - kubernetes
-home: https://github.com/example/vault-etcd-sync-operator
+home: https://github.com/chitender/hermes
+sources:
+  - https://github.com/chitender/hermes
 maintainers:
-  - name: platform-team
-    email: platform@example.com
+  - name: chitender
